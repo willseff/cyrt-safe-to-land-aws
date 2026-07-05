@@ -1,0 +1,58 @@
+---
+# Tells Kubernetes: "I want 2 copies of my app always running"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cyrt-api                    # name of this deployment
+  labels:
+    app: cyrt-api                   # label so the Service can find these pods
+spec:
+  replicas: 2                       # run 2 pods (if one crashes, the other stays up)
+  selector:
+    matchLabels:
+      app: cyrt-api                 # must match the pod labels below
+  template:                         # the "blueprint" for each pod
+    metadata:
+      labels:
+        app: cyrt-api               # each pod gets this label
+    spec:
+      containers:
+        - name: cyrt-api
+          image: 488850522194.dkr.ecr.us-east-1.amazonaws.com/cyrt-safe-to-land:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080   # port your app listens on inside the container
+          resources:                # how much CPU/RAM each pod gets
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          # Health checks — if these fail, Kubernetes restarts the pod
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Tells Kubernetes: "give these pods a stable address so the world can reach them"
+apiVersion: v1
+kind: Service
+metadata:
+  name: cyrt-api
+spec:
+  type: ClusterIP                    # internal only — reachable from other pods in the cluster
+  selector:
+    app: cyrt-api                    # route traffic to pods with this label
+  ports:
+    - port: 80                       # external port (what callers hit)
+      targetPort: 8080               # container port (what your app listens on)
